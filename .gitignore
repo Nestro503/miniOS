@@ -1,0 +1,38 @@
+# Fichiers CLion/IDE
+.idea/
+*.iml
+
+# Dossiers de build
+cmake-build-*/
+build/
+out/
+
+# Fichiers CMake générés
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+# Fichiers temporaires & logs
+*.log
+*.tmp
+
+# Binaires
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.o
+*.obj
+
+# CLion spécifique
+.clion-environment.txt
+.clion-source-directory
+
+# Autres fichiers temporaires
+TargetDirectories.txt
+LastTest.log
