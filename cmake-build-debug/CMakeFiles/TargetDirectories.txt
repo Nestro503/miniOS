@@ -1,3 +1,0 @@
-C:/Users/Erwan/CLionProjects/miniOS/cmake-build-debug/CMakeFiles/miniOS.dir
-C:/Users/Erwan/CLionProjects/miniOS/cmake-build-debug/CMakeFiles/edit_cache.dir
-C:/Users/Erwan/CLionProjects/miniOS/cmake-build-debug/CMakeFiles/rebuild_cache.dir
