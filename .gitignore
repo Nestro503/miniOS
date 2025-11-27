@@ -36,3 +36,5 @@ CTestTestfile.cmake
 # Autres fichiers temporaires
 TargetDirectories.txt
 LastTest.log
+**/LastTest.log
+
