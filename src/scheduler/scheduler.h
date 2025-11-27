@@ -1,0 +1,5 @@
+
+#ifndef MINIOS_SCHEDULER_H
+#define MINIOS_SCHEDULER_H
+
+#endif //MINIOS_SCHEDULER_H
