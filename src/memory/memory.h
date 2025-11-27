@@ -1,0 +1,6 @@
+
+
+#ifndef MINIOS_MEMORY_H
+#define MINIOS_MEMORY_H
+
+#endif //MINIOS_MEMORY_H
