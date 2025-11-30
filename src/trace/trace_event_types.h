@@ -1,0 +1,16 @@
+
+// TEMPORAIRE
+
+#ifndef MINIOS_TRACE_EVENT_TYPES_H
+#define MINIOS_TRACE_EVENT_TYPES_H
+
+// Tous les types d'événements utiles pour les stats + graphiques
+#define EVENT_CREATE        "CREATE"
+#define EVENT_STATE_CHANGE  "STATE_CHANGE"
+#define EVENT_BLOCKED       "BLOCKED"
+#define EVENT_UNBLOCKED     "UNBLOCKED"
+#define EVENT_TERMINATE     "TERMINATED"
+#define EVENT_SCHED_SELECT  "SCHED_SELECT"
+#define EVENT_CONTEXT_SWITCH "CONTEXT_SWITCH"
+
+#endif //MINIOS_TRACE_EVENT_TYPES_H

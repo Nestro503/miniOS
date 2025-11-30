@@ -1,4 +1,0 @@
-#ifndef MINIOS_TRACE_H
-#define MINIOS_TRACE_H
-
-#endif //MINIOS_TRACE_H

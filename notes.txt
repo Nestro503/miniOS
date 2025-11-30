@@ -1,0 +1,9 @@
+TO DO :
+
+o Explications du fonctionnement et des manips a faire aux autres
+
+o Implémentation Mutex + Semaphore
+o Amelioration de l'interface graphique
+o Synchronisation de l'interface graphique avec le reste du code (pont = trace.csv)
+
+o Reflexion données d'entrées : comment faire les choix de départs via utilisateur

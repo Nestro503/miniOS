@@ -8,6 +8,5 @@ add_executable(miniOS
         src/process/process.c src/process/process.h
         src/scheduler/scheduler.c src/scheduler/scheduler.h
         src/io/io.c src/io/io.h
-        src/trace/trace.c src/trace/trace.h
-        src/sync/sync.c src/sync/sync.h
-        )
+        src/sync/mutex.c src/sync/mutex.h
+        src/sync/semaphore.c src/sync/semaphore.h src/trace/logger.c src/trace/logger.h src/trace/trace_event_types.h)
