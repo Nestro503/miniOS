@@ -3,19 +3,30 @@
 #define MINIOS_PROCESS_H
 
 #include <stddef.h>
+#include <stdbool.h>
+
 
 typedef enum {
-    NEW,
+    NEW = 0,
     READY,
     RUNNING,
     BLOCKED,
     TERMINATED
 } ProcessState;
 
+
+typedef enum {
+    PRIORITY_LOW = 0,
+    PRIORITY_MEDIUM,
+    PRIORITY_HIGH
+} ProcessPriority;
+
+
+
 typedef struct PCB {
     /* IDENTIFICATION */
     int pid;
-    int priority;
+    ProcessPriority priority; // PRIORITY_LOW PRIORITY_MEDIUM PRIORITY_HIGH
 
     /* ÉTAT DU PROCESSUS */
     ProcessState state;
@@ -26,6 +37,8 @@ typedef struct PCB {
     int finish_time;         // moment TERMINATED
     int remaining_time;      // temps CPU restant (burst)
     int last_run_time;       // pour Round Robin / fairness
+    int quantum_remaining;   // Pour Round Robin / combien de quantum tick reste-y-il ?
+
 
     /* CONTEXTE D’EXÉCUTION (simulé) */
     void *stack;             // pointeur vers la pile simulée
@@ -38,7 +51,7 @@ typedef struct PCB {
 
     /* I/O BLOQUANTES */
     int blocked_until;       // temps de réveil si I/O en attente
-    int waiting_for_io;      // booléen : 1 si en I/O, 0 sinon
+    bool waiting_for_io;      // booléen : 1 si en I/O, 0 sinon
 
     /* SYNCHRONISATION */
     void *waiting_on_mutex;      // mutex sur lequel il est bloqué
