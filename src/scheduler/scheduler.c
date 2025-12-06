@@ -4,8 +4,8 @@
 
 #include "scheduler.h"
 
-
 Scheduler global_scheduler;
+
 
 void pcb_queue_init(PCBQueue *q) {
     q->head = NULL;
@@ -74,25 +74,24 @@ void scheduler_add_ready(PCB *p) {
 
     p->state = READY;
 
-    // Politique RR : une seule file
+    // Politique RR : on ignore la priorité, tout le monde en MEDIUM
     if (global_scheduler.policy == SCHED_ROUND_ROBIN) {
         pcb_queue_up(&global_scheduler.ready_queues[PRIORITY_MEDIUM], p);
     }
+    // Politique priorité ou P_RR : on respecte la prio du PCB
     else {
-        // PRIORITY ou P_RR
         pcb_queue_up(&global_scheduler.ready_queues[p->priority], p);
     }
 
-    /* ================================
-       PRÉEMPTION — SCHED_PRIORITY ONLY
-       ================================ */
+    // ================================
+    //  PRÉEMPTION — SCHED_PRIORITY
+    // ================================
     if (global_scheduler.policy == SCHED_PRIORITY && global_scheduler.current != NULL) {
 
         PCB *current = global_scheduler.current;
 
-        // si le nouveau processus a une prio > à celle du courant
+        // si le nouveau READY a une priorité strictement supérieure
         if (p->priority > current->priority) {
-
             // 1. Le processus courant redevient READY
             current->state = READY;
             pcb_queue_up(&global_scheduler.ready_queues[current->priority], current);
@@ -100,11 +99,12 @@ void scheduler_add_ready(PCB *p) {
             // 2. Libère le CPU
             global_scheduler.current = NULL;
 
-            // 3. Compte comme un changement de contexte
+            // 3. On compte le changement de contexte
             global_scheduler.context_switches++;
         }
     }
 }
+
 
 
 
@@ -135,11 +135,18 @@ PCB *scheduler_pick_next(void) {
 
     if (next != NULL) {
         next->state = RUNNING;
+
+        // Si c'est la première fois qu'on le planifie, on fixe start_time
+        if (next->start_time == -1) {
+            next->start_time = global_scheduler.current_time;
+        }
+
         global_scheduler.current = next;
         global_scheduler.context_switches++;
     } else {
         global_scheduler.current = NULL;
     }
+
 
     return next;
 }

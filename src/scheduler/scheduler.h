@@ -49,9 +49,11 @@ typedef struct Scheduler {
 } Scheduler;
 
 
+// Variable globale
+extern Scheduler global_scheduler;
+
+
 // Gestion de la queue
-
-
 void pcb_queue_init(PCBQueue *q);   // Init de la queue
 void pcb_queue_up(PCBQueue *q, PCB *p); // Ajoute un PCB (fin de file car FIFO)
 PCB *pcb_queue_give(PCBQueue *q);  // Donne le premier PCB de la file au CPU

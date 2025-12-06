@@ -63,5 +63,8 @@ typedef struct PCB {
 } PCB;
 
 
+PCB *process_create(ProcessPriority priority, int burst_time, int arrival_time);
+
+
 
 #endif //MINIOS_PROCESS_H
