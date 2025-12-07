@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include "process.h"
-#include "../scheduler/scheduler.h"   // pour global_scheduler
+#include "../scheduler/scheduler.h"
+#include "../trace/logger.h"
+
 
 static int next_pid = 1;  // compteur de PID
 
@@ -47,6 +49,20 @@ PCB *process_create(ProcessPriority priority, int burst_time, int arrival_time) 
 
     // Stat globale : un processus de plus
     global_scheduler.total_processes++;
+
+
+
+    // Trace de création (on loggue l’arrivée logique, pas le moment réel d'admission)
+    trace_event(
+        global_scheduler.current_time,  // ou arrival_time si tu préfères
+        p->pid,
+        "CREATE",
+        "NEW",
+        "",
+        -1,
+        "NEW"
+    );
+
 
     return p;
 }

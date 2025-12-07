@@ -64,7 +64,7 @@ bool pcb_queue_empty(PCBQueue *q); // Test si queue empty
 
 void scheduler_init(SchedulingPolicy policy, int rr_time_quantum); // init du scheduler, choix quantum, CHOIX DE LA POLITIQUE...
 void scheduler_add_ready(PCB *p); // Passage à l'état ready (utile pour préemption)
-void scheduler_block(PCB *p); // Bloque le processus (I/O, Semaphore, MUTEX)
+void scheduler_block(PCB *p, const char *reason, const char *queue_label);
 void scheduler_terminate(PCB *p); // Fin d'un process
 
 void scheduler_tick(void);

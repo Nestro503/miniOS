@@ -3,8 +3,28 @@
 //
 
 #include "scheduler.h"
+#include "../trace/logger.h"
 
 Scheduler global_scheduler;
+
+
+
+static const char *state_to_str(ProcessState s) {
+    switch (s) {
+        case NEW:        return "NEW";
+        case READY:      return "READY";
+        case RUNNING:    return "RUNNING";
+        case BLOCKED:    return "BLOCKED";
+        case TERMINATED: return "TERMINATED";
+        default:         return "";
+    }
+}
+
+static int current_cpu_id(void) {
+    // mono-cœur : toujours 0
+    return (global_scheduler.current != NULL) ? 0 : -1;
+}
+
 
 
 void pcb_queue_init(PCBQueue *q) {
@@ -74,23 +94,38 @@ void scheduler_add_ready(PCB *p) {
 
     p->state = READY;
 
-    // Politique RR : on ignore la priorité, tout le monde en MEDIUM
+    /* Sélection de la file READY cible selon la politique */
+    int queue_index;
+
     if (global_scheduler.policy == SCHED_ROUND_ROBIN) {
-        pcb_queue_up(&global_scheduler.ready_queues[PRIORITY_MEDIUM], p);
-    }
-    // Politique priorité ou P_RR : on respecte la prio du PCB
-    else {
-        pcb_queue_up(&global_scheduler.ready_queues[p->priority], p);
+        // RR : une seule file, on force tout le monde en MEDIUM
+        queue_index = PRIORITY_MEDIUM;
+    } else {
+        // PRIORITY ou SCHED_P_RR : on respecte la priorité du PCB
+        queue_index = p->priority;
     }
 
-    // ================================
-    //  PRÉEMPTION — SCHED_PRIORITY
-    // ================================
+    pcb_queue_up(&global_scheduler.ready_queues[queue_index], p);
+
+    /* Trace du passage en READY */
+    trace_event(
+        global_scheduler.current_time,
+        p->pid,
+        "STATE_CHANGE",
+        "READY",
+        "",      // pas de raison particulière
+        -1,      // pas sur CPU, juste dans une file
+        "READY"
+    );
+
+    /* ================================
+       PRÉEMPTION — SCHED_PRIORITY
+       ================================ */
     if (global_scheduler.policy == SCHED_PRIORITY && global_scheduler.current != NULL) {
 
         PCB *current = global_scheduler.current;
 
-        // si le nouveau READY a une priorité strictement supérieure
+        // si le nouveau READY a une priorité strictement supérieure à celle du courant
         if (p->priority > current->priority) {
             // 1. Le processus courant redevient READY
             current->state = READY;
@@ -110,6 +145,7 @@ void scheduler_add_ready(PCB *p) {
 
 
 
+
 PCB *scheduler_pick_next(void) {
     PCB *next = NULL;
 
@@ -120,9 +156,8 @@ PCB *scheduler_pick_next(void) {
                 next = pcb_queue_give(&global_scheduler.ready_queues[PRIORITY_MEDIUM]);
         break;
 
-        case SCHED_PRIORITY: // pas de break donc c'est la meme chose pour prio et hybride
+        case SCHED_PRIORITY:
         case SCHED_P_RR:
-            // même logique de choix entre prios :
             // HIGH -> MEDIUM -> LOW
             for (int pr = PRIORITY_HIGH; pr >= PRIORITY_LOW; --pr) {
                 if (!pcb_queue_empty(&global_scheduler.ready_queues[pr])) {
@@ -143,10 +178,20 @@ PCB *scheduler_pick_next(void) {
 
         global_scheduler.current = next;
         global_scheduler.context_switches++;
+
+        // Trace : passage en RUNNING sur le CPU
+        trace_event(
+            global_scheduler.current_time,
+            next->pid,
+            "STATE_CHANGE",
+            "RUNNING",
+            "",
+            0,          // id CPU (mono-cœur)
+            "CPU"
+        );
     } else {
         global_scheduler.current = NULL;
     }
-
 
     return next;
 }
@@ -154,29 +199,63 @@ PCB *scheduler_pick_next(void) {
 
 
 
-void scheduler_block(PCB *p) {
+
+void scheduler_block(PCB *p, const char *reason, const char *queue_label) {
     if (!p) return;
 
+    // Passage à l'état BLOQUÉ
     p->state = BLOCKED;
     pcb_queue_up(&global_scheduler.blocked_queue, p);
 
+    // Log de l'événement de blocage
+    // NOTE : "io_or_lock" est un placeholder. Plus tard tu pourras
+    // appeler cette fonction avec un "reason" plus précis (io, mutex, semaphore)
+    trace_event(
+        global_scheduler.current_time, // time
+        p->pid,                        // pid
+        "STATE_CHANGE",                // event
+        "BLOCKED",                     // state
+        "io_or_lock",                  // reason (à affiner plus tard)
+        -1,                            // cpu (pas sur CPU, en attente)
+        "BLOCKED"                      // queue
+    );
+
+    // Si c'était le processus courant, le CPU devient libre
     if (global_scheduler.current == p) {
         global_scheduler.current = NULL;
     }
 }
+
+
 
 
 void scheduler_terminate(PCB *p) {
     if (!p) return;
 
+    // Mise à jour de l'état et des stats
     p->state = TERMINATED;
     p->finish_time = global_scheduler.current_time;
+
+    // Ajout dans la file des terminés
     pcb_queue_up(&global_scheduler.terminated_queue, p);
 
+    // Trace CSV
+    trace_event(
+        global_scheduler.current_time, // time
+        p->pid,                        // pid
+        "TERMINATED",                  // event
+        "TERMINATED",                  // state
+        "",                            // reason (aucune raison particulière)
+        -1,                            // cpu (plus sur CPU)
+        "TERM"                         // queue (file des terminés)
+    );
+
+    // Libérer le CPU si c'était le process courant
     if (global_scheduler.current == p) {
         global_scheduler.current = NULL;
     }
 }
+
 
 
 
@@ -187,39 +266,55 @@ bool scheduler_is_finished(void) {
 }
 
 void scheduler_tick(void) {
+    // Avance l'horloge globale
     global_scheduler.current_time++;
 
-    // 1) gérer le processus courant (si il y en a un)
+    // 1) Gérer le processus courant (s'il y en a un)
     PCB *p = global_scheduler.current;
 
     if (p != NULL) {
-        // il consomme du CPU
+        // Le processus courant consomme du CPU
         p->remaining_time--;
         p->last_run_time = global_scheduler.current_time;
 
-        // s'il finit son burst CPU
+        // S'il finit son burst CPU
         if (p->remaining_time <= 0) {
             scheduler_terminate(p);
         }
-        // sinon : pour l'instant, RR non préemptif / priorité préemptive
-        // la vraie logique de préemption entre prios viendra après
+        // Sinon : pour l'instant, pas de logique de quantum / préemption ici
     }
 
-    // 2) gérer les réveils I/O des BLOCKED
+    // 2) Gérer les réveils I/O des BLOCKED
     int nb_blocked = global_scheduler.blocked_queue.size;
     for (int i = 0; i < nb_blocked; ++i) {
         PCB *b = pcb_queue_give(&global_scheduler.blocked_queue);
         if (b->blocked_until <= global_scheduler.current_time) {
+            // Il peut être réveillé
             b->waiting_for_io = false;
+            b->state = READY;
+
+            // Trace de l'événement UNBLOCKED -> READY (raison : io)
+            trace_event(
+                global_scheduler.current_time,
+                b->pid,
+                "UNBLOCKED",
+                "READY",
+                "io",
+                -1,        // pas sur CPU
+                "READY"    // retourne dans une file READY
+            );
+
+            // On le remet dans les files READY
             scheduler_add_ready(b);
         } else {
-            // il reste bloqué, on le remet dans blocked_queue
+            // Il reste bloqué, on le remet dans la file BLOCKED
             pcb_queue_up(&global_scheduler.blocked_queue, b);
         }
     }
 
-    // 3) si plus de process courant, choisir le suivant
+    // 3) Si plus de process courant, choisir le suivant
     if (global_scheduler.current == NULL) {
         scheduler_pick_next();
     }
 }
+
