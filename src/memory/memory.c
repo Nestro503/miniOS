@@ -1,5 +1,168 @@
-//
-// Created by Erwan on 27/11/2025.
-//
-
 #include "memory.h"
+
+#include <stdint.h>
+#include <stdio.h>
+
+/************************************************************
+ *   Paramètres du heap simulé
+ ************************************************************/
+
+// 64 MiB = 64 * 1024 * 1024 octets
+#define HEAP_SIZE   (64u * 1024u * 1024u)
+
+/* Zone de mémoire simulée (heap utilisateur). */
+static uint8_t heap[HEAP_SIZE];
+
+/* Description d’un bloc dans la free list. */
+typedef struct block {
+    size_t size;           // taille utile du bloc (données utilisateur)
+    int    free;           // 1 = libre, 0 = occupé
+    struct block* next;    // bloc suivant dans la free list
+} block_t;
+
+/* Premier bloc du heap. */
+static block_t* first_block = NULL;
+
+
+/************************************************************
+ *   Fonctions internes
+ ************************************************************/
+
+/* Alignement (optionnel) pour éviter des problèmes sur certaines archis). */
+static size_t align_size(size_t size) {
+    const size_t align = sizeof(void*);
+    return (size + align - 1) & ~(align - 1);
+}
+
+/* Convertit un pointeur utilisateur vers l’en-tête de bloc correspondant. */
+static block_t* ptr_to_block(void* ptr) {
+    if (!ptr) return NULL;
+    return (block_t*)((uint8_t*)ptr - sizeof(block_t));
+}
+
+/* Affichage d'une taille lisible (B / KiB / MiB). */
+static void print_human_size(size_t bytes) {
+    if (bytes >= 1024u * 1024u) {
+        printf("%zu MiB", bytes / (1024u * 1024u));
+    } else if (bytes >= 1024u) {
+        printf("%zu KiB", bytes / 1024u);
+    } else {
+        printf("%zu B", bytes);
+    }
+}
+
+
+/************************************************************
+ *   API publique
+ ************************************************************/
+
+void memory_init(void) {
+    /* On place un bloc unique couvrant tout le heap. */
+    first_block       = (block_t*) heap;
+    first_block->size = HEAP_SIZE - sizeof(block_t);
+    first_block->free = 1;
+    first_block->next = NULL;
+}
+
+void* mini_malloc(size_t size) {
+    if (size == 0 || !first_block)
+        return NULL;
+
+    size = align_size(size);
+
+    block_t* curr = first_block;
+
+    while (curr) {
+        if (curr->free && curr->size >= size) {
+
+            /* Si le bloc est beaucoup plus grand, on le découpe (split). */
+            if (curr->size >= size + sizeof(block_t) + 8) {
+                uint8_t* split_addr = (uint8_t*)curr + sizeof(block_t) + size;
+                block_t* new_block  = (block_t*)split_addr;
+
+                new_block->size = curr->size - size - sizeof(block_t);
+                new_block->free = 1;
+                new_block->next = curr->next;
+
+                curr->size = size;
+                curr->next = new_block;
+            }
+
+            curr->free = 0;
+            return (uint8_t*)curr + sizeof(block_t);
+        }
+        curr = curr->next;
+    }
+
+    /* Plus de place disponible. */
+    return NULL;
+}
+
+void mini_free(void* ptr) {
+    if (!ptr || !first_block)
+        return;
+
+    block_t* block = ptr_to_block(ptr);
+
+    /* Vérifie que l’adresse pointe bien dans le heap simulé. */
+    if ((uint8_t*)block < heap || (uint8_t*)block >= heap + HEAP_SIZE)
+        return;  // pointeur invalide -> on ignore ou on log
+
+    /* Vérifie que ce bloc appartient bien à notre free list. */
+    block_t* curr = first_block;
+    block_t* prev = NULL;
+    int found = 0;
+
+    while (curr) {
+        if (curr == block) {
+            found = 1;
+            break;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+
+    if (!found)
+        return;  // bloc inconnu -> on ignore
+
+    /* Protection contre double free. */
+    if (block->free)
+        return;
+
+    /* Marque le bloc comme libre. */
+    block->free = 1;
+
+    /* Fusion avec le bloc suivant s’il est libre. */
+    if (block->next && block->next->free) {
+        block->size += sizeof(block_t) + block->next->size;
+        block->next  = block->next->next;
+    }
+
+    /* Fusion avec le bloc précédent s’il est libre. */
+    if (prev && prev->free) {
+        prev->size += sizeof(block_t) + block->size;
+        prev->next  = block->next;
+    }
+}
+
+/* Affichage propre : liste des blocs (état du heap simulé). */
+void memory_dump(void) {
+    block_t* curr = first_block;
+    int index = 0;
+
+    printf("=== HEAP STATE (%zu MiB) ===\n", HEAP_SIZE / (1024u * 1024u));
+
+    while (curr) {
+        printf("Bloc %d : %s | ",
+               index,
+               curr->free ? "FREE" : "USED");
+
+        print_human_size(curr->size);
+        printf(" | @%p\n", (void*)curr);
+
+        curr = curr->next;
+        index++;
+    }
+
+    printf("================================\n");
+}

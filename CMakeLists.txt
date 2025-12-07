@@ -12,3 +12,6 @@ add_executable(miniOS
         src/sync/semaphore.c src/sync/semaphore.h src/trace/logger.c src/trace/logger.h src/trace/trace_event_types.h
         src/menu/menu.c
         src/menu/menu.h)
+        src/sync/semaphore.c src/sync/semaphore.h src/trace/logger.c src/trace/logger.h src/trace/trace_event_types.h
+        src/memory/memory.h src/memory/memory.c
+)
