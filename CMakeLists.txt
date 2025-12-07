@@ -9,9 +9,12 @@ add_executable(miniOS
         src/scheduler/scheduler.c src/scheduler/scheduler.h
         src/io/io.c src/io/io.h
         src/sync/mutex.c src/sync/mutex.h
-        src/sync/semaphore.c src/sync/semaphore.h src/trace/logger.c src/trace/logger.h src/trace/trace_event_types.h
+        src/sync/semaphore.c src/sync/semaphore.h
+        src/trace/logger.c src/trace/logger.h src/trace/trace_event_types.h
         src/menu/menu.c
-        src/menu/menu.h)
-        src/sync/semaphore.c src/sync/semaphore.h src/trace/logger.c src/trace/logger.h src/trace/trace_event_types.h
-        src/memory/memory.h src/memory/memory.c
+        src/menu/menu.h
+        src/memory/memory.c
+        src/memory/memory.h
+
+
 )
