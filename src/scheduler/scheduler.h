@@ -8,7 +8,7 @@
 #define NUM_PRIORITIES 3
 
 typedef enum {
-    SCHED_ROUND_ROBIN = 0,        // RR (non préemptif)
+    SCHED_ROUND_ROBIN = 0,        // RR (préemptif)
     SCHED_PRIORITY,      // Priorité statique (préemptif)
     SCHED_P_RR        // Priorité + RR (préemptif entre priorités)
 } SchedulingPolicy;

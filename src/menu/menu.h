@@ -3,7 +3,7 @@
 
 #include "../scheduler/scheduler.h"
 
-// Affiche le menu et retourne la politique choisie
 SchedulingPolicy menu_choose_policy(void);
+int menu_choose_quantum(void);
 
 #endif // MINIOS_MENU_H

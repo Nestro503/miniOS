@@ -301,9 +301,15 @@ int main(void) {
     /* 1) Menu utilisateur */
     SchedulingPolicy policy = menu_choose_policy();
 
+    int quantum = 0;
+    if (policy == SCHED_ROUND_ROBIN || policy == SCHED_P_RR) {
+        quantum = menu_choose_quantum();   // <-- nouvelle fonction
+    }
+
     /* 2) Init logger et scheduler */
     trace_init("trace.csv");
-    scheduler_init(policy, 0);
+    scheduler_init(policy, quantum);
+
 
     /* 3) Création de tâches (exemple) */
     PCB *tasks[NB_TASKS];
