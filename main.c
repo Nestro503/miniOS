@@ -10,10 +10,10 @@
 #include "src/menu/menu.h"
 #include "src/memory/memory.h"
 #include "src/io/io.h"
+#include "src/process/scenario.h"
 
 
-
-#define NB_TASKS 3
+#define MAX_TASKS 32   // ou une autre limite max
 
 
 /* ================= Processus & états (simulation) ================= */
@@ -297,31 +297,28 @@ static void simulate_io(void) {
 /* ================= MAIN ================= */
 
 int main(void) {
-
     /* 1) Menu utilisateur */
     SchedulingPolicy policy = menu_choose_policy();
 
     int quantum = 0;
     if (policy == SCHED_ROUND_ROBIN || policy == SCHED_P_RR) {
-        quantum = menu_choose_quantum();   // <-- nouvelle fonction
+        quantum = menu_choose_quantum();   // nécessite que tu aies ajouté cette fonction dans menu.c
     }
 
     /* 2) Init logger et scheduler */
-    trace_init("trace.csv");
+    trace_init("../tools/trace/trace.csv");
     scheduler_init(policy, quantum);
 
 
     /* 3) Création de tâches (exemple) */
-    PCB *tasks[NB_TASKS];
-
-    tasks[0] = process_create(PRIORITY_HIGH,   5, 0);
-    tasks[1] = process_create(PRIORITY_MEDIUM, 3, 2);
-    tasks[2] = process_create(PRIORITY_LOW,    4, 4);
+    /* 3) Construction du scénario (processus définis par l'utilisateur) */
+    PCB *tasks[MAX_TASKS];
+    int nb_tasks = scenario_build_interactive(tasks, MAX_TASKS, policy);
 
     /* 4) Simulation */
     while (!scheduler_is_finished()) {
 
-        for (int i = 0; i < NB_TASKS; ++i) {
+        for (int i = 0; i < nb_tasks; ++i) {
             PCB *p = tasks[i];
             if (p->state == NEW && p->arrival_time <= global_scheduler.current_time) {
                 scheduler_add_ready(p);
@@ -336,7 +333,7 @@ int main(void) {
 
     printf("Simulation terminee au temps = %d\n", global_scheduler.current_time);
 
-    for (int i = 0; i < NB_TASKS; ++i) {
+    for (int i = 0; i < nb_tasks; ++i) {
         free(tasks[i]);
     }
 
