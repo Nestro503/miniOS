@@ -92,20 +92,24 @@ void scheduler_init(SchedulingPolicy policy, int rr_time_quantum) {
 void scheduler_add_ready(PCB *p) {
     if (!p) return;
 
+    /* Passage en état READY */
     p->state = READY;
 
     /* Déterminer la file READY selon la politique */
     int queue_index;
 
     if (global_scheduler.policy == SCHED_ROUND_ROBIN) {
-        queue_index = PRIORITY_MEDIUM; // une seule file
+        // RR : une seule file (MEDIUM)
+        queue_index = PRIORITY_MEDIUM;
     } else {
-        queue_index = p->priority;     // priorité réelle
+        // PRIORITY / P_RR : on respecte la priorité du PCB
+        queue_index = p->priority;
     }
 
+    /* On place le processus dans la file READY choisie */
     pcb_queue_up(&global_scheduler.ready_queues[queue_index], p);
 
-    /* Log */
+    /* Log : entrée en READY */
     trace_event(
         global_scheduler.current_time,
         p->pid,
@@ -116,25 +120,41 @@ void scheduler_add_ready(PCB *p) {
         "READY"
     );
 
-    /* ================================
+    /* =====================================================
        PRÉEMPTION — SCHED_PRIORITY / SCHED_P_RR
-       ================================ */
+       Si un processus de plus haute priorité arrive, il
+       peut préempter le processus courant.
+       ===================================================== */
     if ((global_scheduler.policy == SCHED_PRIORITY ||
          global_scheduler.policy == SCHED_P_RR) &&
         global_scheduler.current != NULL)
     {
         PCB *current = global_scheduler.current;
 
-        // préempte si nouvelle tâche plus prioritaire
+        /* Si le nouveau READY a une priorité strictement supérieure */
         if (p->priority > current->priority) {
 
+            /* Le processus courant redevient READY */
             current->state = READY;
             pcb_queue_up(&global_scheduler.ready_queues[current->priority], current);
 
+            /* Le CPU est libéré */
             global_scheduler.current = NULL;
+
+            /* Log de la préemption */
+            trace_event(
+                global_scheduler.current_time,
+                current->pid,
+                "PREEMPTED",
+                "READY",
+                "higher_priority_arrived",
+                -1,
+                "READY"
+            );
         }
     }
 }
+
 
 
 
@@ -314,9 +334,9 @@ void scheduler_tick(void) {
                 // CPU libre
                 global_scheduler.current = NULL;
 
-                // (Optionnel : log spécifique au quantum)
-                // trace_event(global_scheduler.current_time, p->pid,
-                //             "TIME_SLICE_EXPIRED", "READY", "", -1, "READY");
+                //  log spécifique au quantum)
+                trace_event(global_scheduler.current_time, p->pid,
+                             "TIME_SLICE_EXPIRED", "READY", "", -1, "READY");
             }
         }
 
