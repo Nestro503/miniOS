@@ -1,12 +1,10 @@
-
 #ifndef MINIOS_IO_H
 #define MINIOS_IO_H
 
 #include <stdint.h>
+#include "../process/process.h"   // pour PCB
 
-/* forward decl : la vraie struct process est définie ailleurs */
-struct process;
-typedef struct process process_t;
+typedef PCB process_t;
 
 /* Types de périphériques simulés */
 typedef enum {
@@ -14,11 +12,11 @@ typedef enum {
     IO_DEVICE_KEYBOARD,
     IO_DEVICE_MOUSE,
     IO_DEVICE_DISK,
-    IO_DEVICE_SCREEN,   // <--- AJOUTER
-    IO_DEVICE_NETWORK   // <--- AJOUTER
+    IO_DEVICE_SCREEN,
+    IO_DEVICE_NETWORK
 } io_device_t;
 
-/* Initialise le module I/O (file des I/O vide). */
+/* Initialise le module I/O (file + sémaphores) */
 void io_init(void);
 
 /* Lance une I/O bloquante pour un processus. */

@@ -1,17 +1,22 @@
 //
-// Created by Erwan on 27/11/2025.
+// Gestion des I/O bloquantes + sémaphores par périphérique
 //
 
 #include "io.h"
 
 #include <stddef.h>
 #include <stdint.h>
-#include "../memory/memory.h"   // pour mini_malloc / mini_free
 
+#include "../scheduler/scheduler.h"   // pour scheduler_block_process_on / scheduler_make_ready
+#include "../memory/memory.h"        // pour mini_malloc / mini_free
+#include "../sync/semaphore.h"       // pour Semaphore
 
-/* fournis par le "scheduler" (implémentés dans ton main de test pour l’instant) */
-extern void scheduler_block_process_on(process_t* p, io_device_t dev);
-extern void scheduler_make_ready(process_t* p);
+// 6 devices : PRINTER, KEYBOARD, MOUSE, DISK, SCREEN, NETWORK
+#define IO_DEVICE_COUNT 6
+
+// Un sémaphore par périphérique : 1 requête en parallèle par device
+// (ici on les utilise comme compteurs de ressources, sans bloquer de PCB)
+static Semaphore io_device_sems[IO_DEVICE_COUNT];
 
 /* ---------------------------------------------------------
  *  File d'attente des I/O
@@ -20,14 +25,14 @@ extern void scheduler_make_ready(process_t* p);
 typedef struct io_wait {
     process_t*      proc;
     uint32_t        wake_time;   // tick où le processus doit être réveillé
-    io_device_t     dev;         // sur quel périphérique il attend
+    io_device_t     dev;         // périphérique concerné
     struct io_wait* next;
 } io_wait_t;
 
 static io_wait_t* io_queue = NULL;
 
 /* allocation/libération des noeuds de la file I/O
- * (ici on utilise ton heap simulé, mais tu pourrais mettre malloc/free)
+ * (on utilise le heap simulé)
  */
 static io_wait_t* io_alloc_node(void) {
     return (io_wait_t*) mini_malloc(sizeof(io_wait_t));
@@ -43,6 +48,12 @@ static void io_free_node(io_wait_t* node) {
 
 void io_init(void) {
     io_queue = NULL;
+
+    // Initialisation des sémaphores de périphériques :
+    // 1 "slot" disponible par device (imprimante, disque, etc.)
+    for (int d = 0; d < IO_DEVICE_COUNT; ++d) {
+        semaphore_init(&io_device_sems[d], 1);
+    }
 }
 
 /* insertion triée par wake_time dans io_queue */
@@ -66,6 +77,14 @@ void io_request(process_t* proc, io_device_t dev,
     if (!proc) return;
 
     uint32_t wake = now + duration;
+
+    /* 0) Réserver la ressource avec le sémaphore du device.
+     *
+     * On passe current = NULL volontairement :
+     *  - dans ce cas, semaphore_wait() ne bloque pas de PCB,
+     *    il sert juste de compteur "ressource utilisée".
+     */
+    semaphore_wait(&io_device_sems[dev], NULL);
 
     /* 1) Bloquer le processus via le scheduler, sur ce device */
     scheduler_block_process_on(proc, dev);
@@ -92,10 +111,13 @@ void io_update(uint32_t now) {
         io_wait_t* node = io_queue;
         io_queue = io_queue->next;
 
-        /* Remettre le processus en READY via le scheduler */
+        /* 1) Libérer la ressource du périphérique (sémaphore) */
+        semaphore_signal(&io_device_sems[node->dev]);
+
+        /* 2) Remettre le processus en READY via le scheduler */
         scheduler_make_ready(node->proc);
 
+        /* 3) Libérer le noeud de la file I/O */
         io_free_node(node);
     }
 }
-

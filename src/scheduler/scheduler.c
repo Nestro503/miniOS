@@ -92,53 +92,70 @@ void scheduler_init(SchedulingPolicy policy, int rr_time_quantum) {
 void scheduler_add_ready(PCB *p) {
     if (!p) return;
 
+    /* Passage en état READY */
     p->state = READY;
 
-    /* Sélection de la file READY cible selon la politique */
+    /* Déterminer la file READY selon la politique */
     int queue_index;
 
     if (global_scheduler.policy == SCHED_ROUND_ROBIN) {
-        // RR : une seule file, on force tout le monde en MEDIUM
+        // RR : une seule file (MEDIUM)
         queue_index = PRIORITY_MEDIUM;
     } else {
-        // PRIORITY ou SCHED_P_RR : on respecte la priorité du PCB
+        // PRIORITY / P_RR : on respecte la priorité du PCB
         queue_index = p->priority;
     }
 
+    /* On place le processus dans la file READY choisie */
     pcb_queue_up(&global_scheduler.ready_queues[queue_index], p);
 
-    /* Trace du passage en READY */
+    /* Log : entrée en READY */
     trace_event(
         global_scheduler.current_time,
         p->pid,
         "STATE_CHANGE",
         "READY",
-        "",      // pas de raison particulière
-        -1,      // pas sur CPU, juste dans une file
+        "",
+        -1,
         "READY"
     );
 
-    /* ================================
-       PRÉEMPTION — SCHED_PRIORITY
-       ================================ */
-    if (global_scheduler.policy == SCHED_PRIORITY && global_scheduler.current != NULL) {
-
+    /* =====================================================
+       PRÉEMPTION — SCHED_PRIORITY / SCHED_P_RR
+       Si un processus de plus haute priorité arrive, il
+       peut préempter le processus courant.
+       ===================================================== */
+    if ((global_scheduler.policy == SCHED_PRIORITY ||
+         global_scheduler.policy == SCHED_P_RR) &&
+        global_scheduler.current != NULL)
+    {
         PCB *current = global_scheduler.current;
 
-        // si le nouveau READY a une priorité strictement supérieure à celle du courant
+        /* Si le nouveau READY a une priorité strictement supérieure */
         if (p->priority > current->priority) {
-            // 1. Le processus courant redevient READY
+
+            /* Le processus courant redevient READY */
             current->state = READY;
             pcb_queue_up(&global_scheduler.ready_queues[current->priority], current);
 
-            // 2. Libère le CPU
+            /* Le CPU est libéré */
             global_scheduler.current = NULL;
 
-            // 3. On compte le changement de contexte
-            global_scheduler.context_switches++;
+            /* Log de la préemption */
+            trace_event(
+                global_scheduler.current_time,
+                current->pid,
+                "PREEMPTED",
+                "READY",
+                "higher_priority_arrived",
+                -1,
+                "READY"
+            );
         }
     }
 }
+
+
 
 
 
@@ -152,13 +169,13 @@ PCB *scheduler_pick_next(void) {
     switch (global_scheduler.policy) {
 
         case SCHED_ROUND_ROBIN:
-            // une seule file, priorité MEDIUM
+            // Une seule file READY : on utilise la file PRIORITY_MEDIUM
                 next = pcb_queue_give(&global_scheduler.ready_queues[PRIORITY_MEDIUM]);
         break;
 
         case SCHED_PRIORITY:
         case SCHED_P_RR:
-            // HIGH -> MEDIUM -> LOW
+            // Politique à priorites : on cherche d'abord HIGH, puis MEDIUM, puis LOW
             for (int pr = PRIORITY_HIGH; pr >= PRIORITY_LOW; --pr) {
                 if (!pcb_queue_empty(&global_scheduler.ready_queues[pr])) {
                     next = pcb_queue_give(&global_scheduler.ready_queues[pr]);
@@ -166,6 +183,9 @@ PCB *scheduler_pick_next(void) {
                 }
             }
         break;
+
+        default:
+            break;
     }
 
     if (next != NULL) {
@@ -175,6 +195,12 @@ PCB *scheduler_pick_next(void) {
         if (next->start_time == -1) {
             next->start_time = global_scheduler.current_time;
         }
+
+        // Initialisation du quantum pour les politiques RR préemptives
+        if (global_scheduler.policy == SCHED_ROUND_ROBIN ||
+            global_scheduler.policy == SCHED_P_RR) {
+            next->quantum_remaining = global_scheduler.rr_time_quantum;
+            }
 
         global_scheduler.current = next;
         global_scheduler.context_switches++;
@@ -195,6 +221,8 @@ PCB *scheduler_pick_next(void) {
 
     return next;
 }
+
+
 
 
 
@@ -273,48 +301,93 @@ void scheduler_tick(void) {
     PCB *p = global_scheduler.current;
 
     if (p != NULL) {
-        // Le processus courant consomme du CPU
-        p->remaining_time--;
-        p->last_run_time = global_scheduler.current_time;
 
-        // S'il finit son burst CPU
-        if (p->remaining_time <= 0) {
-            scheduler_terminate(p);
+        /* =======================================================
+           CAS 1 : Round Robin préemptif (SCHED_ROUND_ROBIN)
+                 OU priorité + RR (SCHED_P_RR)
+           ======================================================= */
+        if (global_scheduler.policy == SCHED_ROUND_ROBIN ||
+            global_scheduler.policy == SCHED_P_RR)
+        {
+            p->remaining_time--;
+            p->quantum_remaining--;
+            p->last_run_time = global_scheduler.current_time;
+
+            // --- Fin du burst CPU ---
+            if (p->remaining_time <= 0) {
+                scheduler_terminate(p);
+            }
+            // --- Quantum expiré ---
+            else if (p->quantum_remaining <= 0) {
+
+                // Remettre le process en READY
+                p->state = READY;
+
+                if (global_scheduler.policy == SCHED_ROUND_ROBIN) {
+                    // RR simple : une seule file
+                    pcb_queue_up(&global_scheduler.ready_queues[PRIORITY_MEDIUM], p);
+                } else {
+                    // P_RR : file correspondant à sa priorité
+                    pcb_queue_up(&global_scheduler.ready_queues[p->priority], p);
+                }
+
+                // CPU libre
+                global_scheduler.current = NULL;
+
+                //  log spécifique au quantum)
+                trace_event(global_scheduler.current_time, p->pid,
+                             "TIME_SLICE_EXPIRED", "READY", "", -1, "READY");
+            }
         }
-        // Sinon : pour l'instant, pas de logique de quantum / préemption ici
+
+        /* =======================================================
+           CAS 2 : PRIORITY (pas de quantum)
+           ======================================================= */
+        else {
+            p->remaining_time--;
+            p->last_run_time = global_scheduler.current_time;
+
+            if (p->remaining_time <= 0) {
+                scheduler_terminate(p);
+            }
+        }
     }
 
-    // 2) Gérer les réveils I/O des BLOCKED
+    /* =======================================================
+       2) Gestion des réveils I/O dans la file BLOCKED
+       ======================================================= */
     int nb_blocked = global_scheduler.blocked_queue.size;
+
     for (int i = 0; i < nb_blocked; ++i) {
         PCB *b = pcb_queue_give(&global_scheduler.blocked_queue);
+
         if (b->blocked_until <= global_scheduler.current_time) {
-            // Il peut être réveillé
+
             b->waiting_for_io = false;
             b->state = READY;
 
-            // Trace de l'événement UNBLOCKED -> READY (raison : io)
+            // Trace UNBLOCKED
             trace_event(
                 global_scheduler.current_time,
                 b->pid,
                 "UNBLOCKED",
                 "READY",
                 "io",
-                -1,        // pas sur CPU
-                "READY"    // retourne dans une file READY
+                -1,
+                "READY"
             );
 
-            // On le remet dans les files READY
             scheduler_add_ready(b);
-        } else {
-            // Il reste bloqué, on le remet dans la file BLOCKED
+        }
+        else {
             pcb_queue_up(&global_scheduler.blocked_queue, b);
         }
     }
 
-    // 3) Si plus de process courant, choisir le suivant
+    /* =======================================================
+       3) Si le CPU est libre, choisir un nouveau RUNNING
+       ======================================================= */
     if (global_scheduler.current == NULL) {
         scheduler_pick_next();
     }
 }
-
