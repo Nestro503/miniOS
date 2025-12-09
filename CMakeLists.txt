@@ -15,6 +15,8 @@ add_executable(miniOS
         src/menu/menu.h
         src/memory/memory.c
         src/memory/memory.h
+        src/process/scenario.c
+        src/process/scenario.h
 
 
 )
