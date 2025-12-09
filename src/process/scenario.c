@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include "scenario.h"
+#include "../io/io.h"
 
 /**
  * Construit un scénario interactif :
  * - demande à l'utilisateur combien de processus créer
  * - pour chacun : priorité, burst CPU, instant d'arrivée
+ * - et éventuellement un périphérique I/O associé
  *
  * Paramètres :
  *  - out_tasks : tableau de PCB* alloué par le main
@@ -32,15 +34,11 @@ int scenario_build_interactive(PCB **out_tasks, int max_tasks, SchedulingPolicy 
 
         printf("\n--- Processus %d ---\n", i + 1);
 
-        /* ================================
-           GESTION DE LA PRIORITÉ SELON LA POLITIQUE
-           ================================ */
+        /* PRIORITÉ */
         if (policy == SCHED_ROUND_ROBIN) {
-            // Pour RR, la priorité n'existe pas → MEDIUM forcé
             printf("Round Robin choisi -> Priorite ignoree, MEDIUM appliquee automatiquement.\n");
             prio = PRIORITY_MEDIUM;
-        }
-        else {
+        } else {
             printf("Priorite (0 = LOW, 1 = MEDIUM, 2 = HIGH) : ");
             if (scanf("%d", &prio) != 1 ||
                 prio < PRIORITY_LOW ||
@@ -51,31 +49,53 @@ int scenario_build_interactive(PCB **out_tasks, int max_tasks, SchedulingPolicy 
             }
         }
 
-        /* ================================
-           BURST CPU
-           ================================ */
+        /* BURST CPU */
         printf("Burst CPU (duree > 0) : ");
         if (scanf("%d", &burst) != 1 || burst <= 0) {
-            fprintf(stderr, "Burst invalide, 5 utilisé par defaut.\n");
+            fprintf(stderr, "Burst invalide, 5 utilise par defaut.\n");
             burst = 5;
         }
 
-        /* ================================
-           ARRIVÉE
-           ================================ */
+        /* ARRIVEE */
         printf("Instant d'arrivee (>= 0) : ");
         if (scanf("%d", &arrival) != 1 || arrival < 0) {
-            fprintf(stderr, "Arrival_time invalide, 0 utilisé par defaut.\n");
+            fprintf(stderr, "Arrival_time invalide, 0 utilise par defaut.\n");
             arrival = 0;
         }
 
-        /* ================================
-           CRÉATION DU PROCESSUS
-           ================================ */
+        /* CREATION DU PROCESSUS */
         PCB *p = process_create((ProcessPriority)prio, burst, arrival);
         if (!p) {
             fprintf(stderr, "Erreur : impossible de creer le processus %d\n", i + 1);
             return i;  // on retourne seulement ceux créés
+        }
+
+        /* CHOIX D'EVENTUELLE I/O */
+        printf("Ce processus utilisera-t-il une I/O bloquante ?\n");
+        printf(" 0 = aucune I/O\n");
+        printf(" 1 = PRINTER\n");
+        printf(" 2 = KEYBOARD\n");
+        printf(" 3 = MOUSE\n");
+        printf(" 4 = DISK\n");
+        printf(" 5 = SCREEN\n");
+        printf(" 6 = NETWORK\n");
+        printf("Choix : ");
+
+        int io_choice = 0;
+        if (scanf("%d", &io_choice) != 1) {
+            io_choice = 0;
+        }
+
+        switch (io_choice) {
+            case 1: p->io_device = IO_DEVICE_PRINTER;  break;
+            case 2: p->io_device = IO_DEVICE_KEYBOARD; break;
+            case 3: p->io_device = IO_DEVICE_MOUSE;    break;
+            case 4: p->io_device = IO_DEVICE_DISK;     break;
+            case 5: p->io_device = IO_DEVICE_SCREEN;   break;
+            case 6: p->io_device = IO_DEVICE_NETWORK;  break;
+            default:
+                p->io_device = -1;  // aucune I/O
+                break;
         }
 
         out_tasks[i] = p;
