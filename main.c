@@ -13,19 +13,39 @@
 #define MAX_TASKS 32
 
 int main(void) {
+
+    /* 0) Menu Principal : Simu ou Démo ? */
+    int start_mode = menu_start_choice();
+
+    if (start_mode == 2) {
+        printf("\n[System] Lancement de la visualisation DEMO...\n");
+        // On passe le chemin du fichier demo.csv en argument au script python
+        // Attention : assure-toi que tools/trace/demo.csv existe bien !
+        system(".\\venv\\Scripts\\python.exe tools/gantt_plotly.py tools/trace/demo.csv");
+
+        // On quitte le programme C proprement ici, on ne fait pas de simulation
+        return 0;
+    }
+
+    /* =========================================
+       SI ON ARRIVE ICI, C'EST LE MODE SIMULATION
+       ========================================= */
+
     /* 1) Choix de la politique d'ordonnancement */
     SchedulingPolicy policy = menu_choose_policy();
 
     int quantum = 0;
     if (policy == SCHED_ROUND_ROBIN || policy == SCHED_P_RR) {
-        // suppose que menu_choose_quantum existe, sinon remplace par un quantum fixe
         quantum = menu_choose_quantum();
     }
 
     /* 2) Initialisations globales */
     memory_init();                                      // heap simulé 64 MiB
     io_init();                                          // module I/O
-    trace_init("tools/trace/trace.csv");            // fichier de trace
+
+    // On écrit dans le fichier standard trace.csv pour la simulation
+    trace_init("tools/trace/trace.csv");
+
     scheduler_init(policy, quantum);                    // scheduler
 
     /* 3) Construction du scénario interactif (processus utilisateur) */
@@ -44,7 +64,7 @@ int main(void) {
             if (p->state == NEW &&
                 p->arrival_time <= global_scheduler.current_time) {
                 scheduler_add_ready(p);
-                }
+            }
         }
 
         // 2) Processus courant
@@ -63,12 +83,9 @@ int main(void) {
                        (uint32_t)global_scheduler.current_time);
         }
 
-
         // 4) Avance d'un tick
         scheduler_tick();
     }
-
-
 
     /* 6) Fin de simulation */
     trace_close();
@@ -76,23 +93,18 @@ int main(void) {
            global_scheduler.current_time);
 
     /* Optionnel : état final de la mémoire simulée */
-    /* État final de la mémoire simulée, segmenté par processus */
     memory_dump_with_processes(tasks, nb_tasks);
-
-    /* ... code existant ... */
 
     /* Libération des PCB */
     for (int i = 0; i < nb_tasks; ++i) {
         free(tasks[i]);
     }
 
-    // --- AJOUT : LANCEMENT AUTOMATIQUE DU GRAPHIQUE ---
-    printf("\n[System] Lancement de l'analyse graphique...\n");
-    // On appelle python pour exécuter le script
-    // Sur Windows, assure-toi que "python" est reconnu, sinon essaie "py"
-    // On pointe vers l'exécutable Python du dossier venv de ton projet
-    // Note les doubles backslash \\ nécessaires en C pour Windows
-    system(".\\venv\\Scripts\\python.exe tools/gantt_plotly.py");
+    // --- LANCEMENT DU GRAPHIQUE (RESULTAT SIMULATION) ---
+    printf("\n[System] Lancement de l'analyse graphique (Resultats Simulation)...\n");
+
+    // Ici, on passe le fichier trace.csv standard généré par le code C
+    system(".\\venv\\Scripts\\python.exe tools/gantt_plotly.py tools/trace/trace.csv");
 
     return 0;
 }
