@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "../process/process.h"
 
 /************************************************************
  *   Paramètres du heap simulé
@@ -165,4 +166,53 @@ void memory_dump(void) {
     }
 
     printf("================================\n");
+}
+
+void memory_dump_with_processes(struct PCB **tasks, int nb_tasks) {
+    block_t* curr = first_block;
+    int index = 0;
+
+    printf("=== HEAP STATE BY PROCESS (%zu MiB) ===\n",
+           HEAP_SIZE / (1024u * 1024u));
+
+    while (curr) {
+        // Pointeur "utilisateur" (ce que mini_malloc renvoie)
+        void *payload = (uint8_t*)curr + sizeof(block_t);
+        int owner_pid = -1;
+
+        // On cherche quel process possède ce bloc (si c'est un bloc USED)
+        if (!curr->free && tasks && nb_tasks > 0) {
+            for (int i = 0; i < nb_tasks; ++i) {
+                struct PCB *p = tasks[i];
+                if (!p) continue;
+                if (p->mem_base == payload) {
+                    owner_pid = p->pid;
+                    break;
+                }
+            }
+        }
+
+        printf("Bloc %d : %s | ",
+               index,
+               curr->free ? "FREE" : "USED");
+
+        print_human_size(curr->size);
+
+        if (!curr->free) {
+            if (owner_pid != -1) {
+                printf(" | PID=%d", owner_pid);
+            } else {
+                printf(" | PID=?");
+            }
+        } else {
+            printf(" | FREE");
+        }
+
+        printf(" | @%p\n", (void*)curr);
+
+        curr = curr->next;
+        index++;
+    }
+
+    printf("=======================================\n");
 }

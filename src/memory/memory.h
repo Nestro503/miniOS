@@ -3,6 +3,7 @@
 #ifndef MINIOS_MEMORY_H
 #define MINIOS_MEMORY_H
 #include <stddef.h>  // size_t
+struct PCB;   // déclaration incomplète, pour utiliser PCB* sans l'inclure
 
 /**
  * Initialise le heap simulé.
@@ -37,6 +38,12 @@ void memory_dump(void);
  * format lisible pour rapport / soutenance.
  */
 void memory_visual_dump(void);
+/**
+ * Affiche l'état du heap en annotant chaque bloc USED
+ * avec le PID du processus qui possède ce bloc (si connu).
+ */
+void memory_dump_with_processes(struct PCB **tasks, int nb_tasks);
+
 
 
 #endif //MINIOS_MEMORY_H

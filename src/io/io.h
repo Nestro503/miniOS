@@ -2,8 +2,7 @@
 #define MINIOS_IO_H
 
 #include <stdint.h>
-#include <stdbool.h>
-#include "../process/process.h"   // pour PCB
+#include "../process/process.h"
 
 /* Types de périphériques I/O simulés */
 typedef enum {
@@ -17,7 +16,8 @@ typedef enum {
 } io_device_t;
 
 /**
- * Initialise le module I/O.
+ * Initialise le module I/O et les primitives de synchro associées
+ * (2 mutex + 4 sémaphores, dont un binaire).
  */
 void io_init(void);
 
@@ -28,16 +28,24 @@ void io_init(void);
  * - blocked_until  = now + duration
  * - io_device      = dev
  * - scheduler_block(proc, "io", "IO")
+ *
+ * En plus, on met à jour le mutex / sémaphore associé au périphérique.
  */
 void io_request(PCB *proc, io_device_t dev,
                 uint32_t duration, uint32_t now);
 
 /**
- * Hook de mise à jour I/O.
- * Avec votre scheduler actuel, les réveils sont gérés dans scheduler_tick()
- * via blocked_until. On garde cette fonction pour compat.
+ * Hook de mise à jour I/O (optionnel, pour compat).
+ * Avec ton scheduler actuel, les réveils se font via blocked_until,
+ * donc io_update ne fait rien.
  */
 void io_update(uint32_t now);
+
+/**
+ * Appelé lorsque le scheduler réveille un processus pour fin d'I/O.
+ * Ça permet de libérer le mutex / sémaphore associé au device.
+ */
+void io_release_resource_for(PCB *proc);
 
 /**
  * Helper pour debug / logs.

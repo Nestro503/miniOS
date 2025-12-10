@@ -1,13 +1,5 @@
-
 #ifndef MINIOS_SEMAPHORE_H
 #define MINIOS_SEMAPHORE_H
-
-/*
-typedef struct {
-    int count;               // Nombre de ressources disponibles
-    queue_t wait_queue;      // File des processus bloqués
-} sem_t;
-*/
 
 #include "../process/process.h"
 
@@ -18,12 +10,12 @@ typedef struct {
  */
 
 typedef struct SemWaitNode {
-    PCB*                proc;
-    struct SemWaitNode* next;
+    PCB*                 proc;
+    struct SemWaitNode*  next;
 } SemWaitNode;
 
 typedef struct Semaphore {
-    int        value;
+    int          value;
     SemWaitNode* queue;
 } Semaphore;
 
@@ -37,6 +29,9 @@ void semaphore_init(Semaphore* s, int initial);
  * P() / wait() / down()
  * - si value > 0 : décrémente et continue
  * - sinon : bloque current et l’ajoute à la file
+ *
+ * Cas particulier :
+ *  - si current == NULL, on ne bloque personne (mode "anonyme")
  */
 void semaphore_wait(Semaphore* s, PCB* current);
 

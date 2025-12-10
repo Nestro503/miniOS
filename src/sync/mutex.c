@@ -1,4 +1,3 @@
-
 #include "mutex.h"
 
 #include "../memory/memory.h"
@@ -78,9 +77,20 @@ void mutex_init(Mutex* m) {
  * Version bloquante :
  * - si free => on prend et on continue
  * - sinon => on bloque le PCB courant, et on l'aligne dans la file du mutex
+ *
+ * Cas particulier : current == NULL => mode "anonyme" (I/O)
  */
 void mutex_lock(Mutex* m, PCB* current) {
-    if (!m || !current) return;
+    if (!m) return;
+
+    /* Mode "anonyme" (utilisation pour I/O simulées, pas de blocage réel) */
+    if (!current) {
+        if (!m->locked) {
+            m->locked = 1;
+            m->owner  = NULL;
+        }
+        return;
+    }
 
     if (!m->locked) {
         // personne ne tient le mutex
@@ -94,7 +104,7 @@ void mutex_lock(Mutex* m, PCB* current) {
     current->waiting_on_mutex = m;
 
     // Option : on met un "blocked_until" très loin pour éviter le réveil par I/O
-    current->blocked_until = 1e9; // ou INT_MAX, selon ton style
+    current->blocked_until = 1000000000; // très loin
 
     // Dans les traces, on peut distinguer la raison
     scheduler_block(current, "mutex", "BLOCKED_MUTEX");
@@ -106,10 +116,15 @@ void mutex_lock(Mutex* m, PCB* current) {
 void mutex_unlock(Mutex* m, PCB* current) {
     if (!m) return;
 
+    /* Mode anonyme : on libère simplement le mutex */
+    if (!current) {
+        m->locked = 0;
+        m->owner  = NULL;
+        return;
+    }
+
     // Simple protection : seul le owner devrait unlock
     if (m->owner != current) {
-        // Soit on ignore, soit on log une erreur
-        // trace_event(...); // si tu veux
         return;
     }
 
@@ -119,7 +134,7 @@ void mutex_unlock(Mutex* m, PCB* current) {
         remove_from_blocked_queue(next);  // on le retire de la file BLOCKED globale
 
         next->waiting_on_mutex = NULL;
-        next->blocked_until = -1;        // plus de raison temporelle d'être bloqué
+        next->blocked_until    = -1;      // plus de raison temporelle d'être bloqué
 
         m->owner  = next;
         m->locked = 1;                   // toujours verrouillé, mais par next

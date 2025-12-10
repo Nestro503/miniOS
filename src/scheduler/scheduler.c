@@ -4,10 +4,10 @@
 
 #include "scheduler.h"
 #include "../trace/logger.h"
+#include "../io/io.h"
+#include "../memory/memory.h"   // <-- adapte le chemin/nom si besoin
 
 Scheduler global_scheduler;
-
-
 
 static const char *state_to_str(ProcessState s) {
     switch (s) {
@@ -25,7 +25,9 @@ static int current_cpu_id(void) {
     return (global_scheduler.current != NULL) ? 0 : -1;
 }
 
-
+/* ===================================================================== */
+/*                            FILES DE PCB                                */
+/* ===================================================================== */
 
 void pcb_queue_init(PCBQueue *q) {
     q->head = NULL;
@@ -48,7 +50,6 @@ void pcb_queue_up(PCBQueue *q, PCB *p) {
     q->size++;
 }
 
-
 PCB *pcb_queue_give(PCBQueue *q) {
     if (q->head == NULL) {
         return NULL;
@@ -64,12 +65,13 @@ PCB *pcb_queue_give(PCBQueue *q) {
     return p;
 }
 
-
 bool pcb_queue_empty(PCBQueue *q) {
     return (q->head == NULL);
 }
 
-
+/* ===================================================================== */
+/*                         INITIALISATION SCHEDULER                      */
+/* ===================================================================== */
 
 void scheduler_init(SchedulingPolicy policy, int rr_time_quantum) {
     global_scheduler.policy = policy;
@@ -87,7 +89,9 @@ void scheduler_init(SchedulingPolicy policy, int rr_time_quantum) {
     global_scheduler.total_processes = 0;
 }
 
-
+/* ===================================================================== */
+/*                           AJOUT EN READY                              */
+/* ===================================================================== */
 
 void scheduler_add_ready(PCB *p) {
     if (!p) return;
@@ -143,25 +147,21 @@ void scheduler_add_ready(PCB *p) {
 
             /* Log de la préemption */
             trace_event(
-                global_scheduler.current_time,
-                current->pid,
-                "PREEMPTED",
-                "READY",
-                "higher_priority_arrived",
-                -1,
-                "READY"
+            global_scheduler.current_time,
+            current->pid,
+            "PREEMPTED",
+            "READY",
+            "higher_priority_arrived",
+            -1,
+            "READY"
             );
         }
     }
 }
 
-
-
-
-
-
-
-
+/* ===================================================================== */
+/*                       SÉLECTION DU PROCHAIN PROCESS                   */
+/* ===================================================================== */
 
 PCB *scheduler_pick_next(void) {
     PCB *next = NULL;
@@ -170,8 +170,8 @@ PCB *scheduler_pick_next(void) {
 
         case SCHED_ROUND_ROBIN:
             // Une seule file READY : on utilise la file PRIORITY_MEDIUM
-                next = pcb_queue_give(&global_scheduler.ready_queues[PRIORITY_MEDIUM]);
-        break;
+            next = pcb_queue_give(&global_scheduler.ready_queues[PRIORITY_MEDIUM]);
+            break;
 
         case SCHED_PRIORITY:
         case SCHED_P_RR:
@@ -182,7 +182,7 @@ PCB *scheduler_pick_next(void) {
                     break;
                 }
             }
-        break;
+            break;
 
         default:
             break;
@@ -196,11 +196,16 @@ PCB *scheduler_pick_next(void) {
             next->start_time = global_scheduler.current_time;
         }
 
-        // Initialisation du quantum pour les politiques RR préemptives
+        // Gestion du quantum :
+        // on NE LE RECHARGE QUE s'il est épuisé ou non initialisé
         if (global_scheduler.policy == SCHED_ROUND_ROBIN ||
-            global_scheduler.policy == SCHED_P_RR) {
-            next->quantum_remaining = global_scheduler.rr_time_quantum;
+            global_scheduler.policy == SCHED_P_RR)
+        {
+            if (next->quantum_remaining <= 0) {
+                next->quantum_remaining = global_scheduler.rr_time_quantum;
             }
+
+        }
 
         global_scheduler.current = next;
         global_scheduler.context_switches++;
@@ -222,11 +227,9 @@ PCB *scheduler_pick_next(void) {
     return next;
 }
 
-
-
-
-
-
+/* ===================================================================== */
+/*                            BLOQUAGE PROCESS                           */
+/* ===================================================================== */
 
 void scheduler_block(PCB *p, const char *reason, const char *queue_label) {
     if (!p) return;
@@ -236,8 +239,6 @@ void scheduler_block(PCB *p, const char *reason, const char *queue_label) {
     pcb_queue_up(&global_scheduler.blocked_queue, p);
 
     // Log de l'événement de blocage
-    // NOTE : "io_or_lock" est un placeholder. Plus tard tu pourras
-    // appeler cette fonction avec un "reason" plus précis (io, mutex, semaphore)
     trace_event(
         global_scheduler.current_time, // time
         p->pid,                        // pid
@@ -254,11 +255,19 @@ void scheduler_block(PCB *p, const char *reason, const char *queue_label) {
     }
 }
 
-
-
+/* ===================================================================== */
+/*                           TERMINAISON PROCESS                         */
+/* ===================================================================== */
 
 void scheduler_terminate(PCB *p) {
     if (!p) return;
+
+    // Libération de la mémoire principale du process sur le heap simulé
+    if (p->mem_base != NULL && p->mem_size > 0) {
+        mini_free(p->mem_base);      // remplace par le vrai nom du free si besoin
+        p->mem_base = NULL;
+        p->mem_size = 0;
+    }
 
     // Mise à jour de l'état et des stats
     p->state = TERMINATED;
@@ -273,7 +282,7 @@ void scheduler_terminate(PCB *p) {
         p->pid,                        // pid
         "TERMINATED",                  // event
         "TERMINATED",                  // state
-        "",                            // reason (aucune raison particulière)
+        "",                            // reason
         -1,                            // cpu (plus sur CPU)
         "TERM"                         // queue (file des terminés)
     );
@@ -286,12 +295,18 @@ void scheduler_terminate(PCB *p) {
 
 
 
-
+/* ===================================================================== */
+/*                     TEST FIN DE SIMULATION                            */
+/* ===================================================================== */
 
 bool scheduler_is_finished(void) {
     // Simple : si tous les process créés sont dans terminated_queue
     return (global_scheduler.terminated_queue.size == global_scheduler.total_processes);
 }
+
+/* ===================================================================== */
+/*                              TICK SCHEDULER                           */
+/* ===================================================================== */
 
 void scheduler_tick(void) {
     // Avance l'horloge globale
@@ -334,12 +349,11 @@ void scheduler_tick(void) {
                 // CPU libre
                 global_scheduler.current = NULL;
 
-                //  log spécifique au quantum)
+                // log spécifique au quantum
                 trace_event(global_scheduler.current_time, p->pid,
-                             "TIME_SLICE_EXPIRED", "READY", "", -1, "READY");
+                            "TIME_SLICE_EXPIRED", "READY", "", -1, "READY");
             }
         }
-
         /* =======================================================
            CAS 2 : PRIORITY (pas de quantum)
            ======================================================= */
@@ -363,10 +377,16 @@ void scheduler_tick(void) {
 
         if (b->blocked_until <= global_scheduler.current_time) {
 
-            b->waiting_for_io = false;
+            /* Si ce processus était bloqué sur une I/O,
+             * on prévient le module I/O pour libérer
+             * mutex / sémaphore associés.
+             */
+            if (b->waiting_for_io && b->io_device >= 0) {
+                io_release_resource_for(b);
+            }
+
             b->state = READY;
 
-            // Trace UNBLOCKED
             trace_event(
                 global_scheduler.current_time,
                 b->pid,
@@ -380,6 +400,7 @@ void scheduler_tick(void) {
             scheduler_add_ready(b);
         }
         else {
+            /* Toujours bloqué : on le remet dans la file BLOCKED */
             pcb_queue_up(&global_scheduler.blocked_queue, b);
         }
     }
@@ -391,5 +412,3 @@ void scheduler_tick(void) {
         scheduler_pick_next();
     }
 }
-
-

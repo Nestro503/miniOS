@@ -1,11 +1,10 @@
-
 #include "semaphore.h"
 #include "../memory/memory.h"
 #include "../scheduler/scheduler.h"
 #include "../trace/logger.h"
 #include "../trace/trace_event_types.h"
 
-/* On réutilise le même helper que pour les mutex, mais en static ici aussi */
+/* Helper : retirer un PCB de la blocked_queue globale */
 static void remove_from_blocked_queue(PCB* p) {
     PCBQueue* q = &global_scheduler.blocked_queue;
     PCB* prev = NULL;
@@ -84,22 +83,19 @@ void semaphore_wait(Semaphore* s, PCB* current) {
         return;
     }
 
-    // Si on n'a pas de PCB (current == NULL), on est dans un cas "anonyme"
-    // comme les I/O : on n'a pas de processus à bloquer, on laisse simplement
-    // value à 0 (ressource saturée) et on sort.
+    // Mode "anonyme" : on ne bloque personne
     if (!current) {
         return;
     }
 
     // Cas normal : plus de ressources et un processus réel -> on bloque
     current->waiting_on_semaphore = s;
-    current->blocked_until = 1000000000; // très loin pour éviter un réveil par le scheduler_tick
+    current->blocked_until = 1000000000; // très loin
 
     scheduler_block(current, "semaphore", "BLOCKED_SEM");
 
     sem_queue_push(s, current);
 }
-
 
 void semaphore_signal(Semaphore* s) {
     if (!s) return;
