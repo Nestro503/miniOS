@@ -3,9 +3,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "../process/process.h"
+// --- AJOUTS POUR LE LOGGING ---
+#include "../trace/logger.h"
+#include "../scheduler/scheduler.h"
 
 /************************************************************
- *   Paramètres du heap simulé
+   Paramètres du heap simulé
  ************************************************************/
 
 // 64 MiB = 64 * 1024 * 1024 octets
@@ -26,7 +29,7 @@ static block_t* first_block = NULL;
 
 
 /************************************************************
- *   Fonctions internes
+   Fonctions internes
  ************************************************************/
 
 /* Alignement (optionnel) pour éviter des problèmes sur certaines archis). */
@@ -54,12 +57,12 @@ static void print_human_size(size_t bytes) {
 
 
 /************************************************************
- *   API publique
+   API publique
  ************************************************************/
 
 void memory_init(void) {
     /* On place un bloc unique couvrant tout le heap. */
-    first_block       = (block_t*) heap;
+    first_block         = (block_t*) heap;
     first_block->size = HEAP_SIZE - sizeof(block_t);
     first_block->free = 1;
     first_block->next = NULL;
@@ -90,6 +93,24 @@ void* mini_malloc(size_t size) {
             }
 
             curr->free = 0;
+
+            // --- DEBUT LOG ALLOCATION ---
+            // On récupère le PID courant, ou -1 si c'est le système
+            int owner = (global_scheduler.current) ? global_scheduler.current->pid : -1;
+            char size_str[32];
+            sprintf(size_str, "%zu", curr->size); // On logue la taille du bloc alloué
+
+            trace_event(
+                    global_scheduler.current_time,
+                    owner,
+                    "MEMORY",
+                    "ALLOC",
+                    size_str, // Raison = taille en octets
+                    -1,
+                    "MEM"
+            );
+            // --- FIN LOG ALLOCATION ---
+
             return (uint8_t*)curr + sizeof(block_t);
         }
         curr = curr->next;
@@ -129,6 +150,22 @@ void mini_free(void* ptr) {
     /* Protection contre double free. */
     if (block->free)
         return;
+
+    // --- DEBUT LOG FREE (Avant de fusionner, pour avoir la bonne taille) ---
+    int owner = (global_scheduler.current) ? global_scheduler.current->pid : -1;
+    char size_str[32];
+    sprintf(size_str, "%zu", block->size);
+
+    trace_event(
+            global_scheduler.current_time,
+            owner,
+            "MEMORY",
+            "FREE",
+            size_str, // Raison = taille en octets
+            -1,
+            "MEM"
+    );
+    // --- FIN LOG FREE ---
 
     /* Marque le bloc comme libre. */
     block->free = 1;

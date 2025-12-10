@@ -25,7 +25,7 @@ int main(void) {
     /* 2) Initialisations globales */
     memory_init();                                      // heap simulé 64 MiB
     io_init();                                          // module I/O
-    trace_init("../tools/trace/trace.csv");             // fichier de trace
+    trace_init("tools/trace/trace.csv");            // fichier de trace
     scheduler_init(policy, quantum);                    // scheduler
 
     /* 3) Construction du scénario interactif (processus utilisateur) */
@@ -79,10 +79,20 @@ int main(void) {
     /* État final de la mémoire simulée, segmenté par processus */
     memory_dump_with_processes(tasks, nb_tasks);
 
+    /* ... code existant ... */
+
     /* Libération des PCB */
     for (int i = 0; i < nb_tasks; ++i) {
         free(tasks[i]);
     }
+
+    // --- AJOUT : LANCEMENT AUTOMATIQUE DU GRAPHIQUE ---
+    printf("\n[System] Lancement de l'analyse graphique...\n");
+    // On appelle python pour exécuter le script
+    // Sur Windows, assure-toi que "python" est reconnu, sinon essaie "py"
+    // On pointe vers l'exécutable Python du dossier venv de ton projet
+    // Note les doubles backslash \\ nécessaires en C pour Windows
+    system(".\\venv\\Scripts\\python.exe tools/gantt_plotly.py");
 
     return 0;
 }

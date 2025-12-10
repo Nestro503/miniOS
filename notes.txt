@@ -2,6 +2,9 @@ TO DO :
 
 o Explications du fonctionnement et des manips a faire aux autres
 
+o Test gestion avec 10 processus en meme temps depuis la trace.csv
+o regarder si possbile de générer une image pour comparer les différentes logiques d'ordonnencement OU faire tout en simultane
+
 o Implémentation Mutex + Semaphore
 o Amelioration de l'interface graphique
 o Synchronisation de l'interface graphique avec le reste du code (pont = trace.csv)

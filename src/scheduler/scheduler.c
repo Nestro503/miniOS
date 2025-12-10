@@ -26,7 +26,7 @@ static int current_cpu_id(void) {
 }
 
 /* ===================================================================== */
-/*                            FILES DE PCB                                */
+/* FILES DE PCB                               */
 /* ===================================================================== */
 
 void pcb_queue_init(PCBQueue *q) {
@@ -70,7 +70,7 @@ bool pcb_queue_empty(PCBQueue *q) {
 }
 
 /* ===================================================================== */
-/*                         INITIALISATION SCHEDULER                      */
+/* INITIALISATION SCHEDULER                     */
 /* ===================================================================== */
 
 void scheduler_init(SchedulingPolicy policy, int rr_time_quantum) {
@@ -90,7 +90,7 @@ void scheduler_init(SchedulingPolicy policy, int rr_time_quantum) {
 }
 
 /* ===================================================================== */
-/*                           AJOUT EN READY                              */
+/* AJOUT EN READY                             */
 /* ===================================================================== */
 
 void scheduler_add_ready(PCB *p) {
@@ -115,13 +115,13 @@ void scheduler_add_ready(PCB *p) {
 
     /* Log : entrée en READY */
     trace_event(
-        global_scheduler.current_time,
-        p->pid,
-        "STATE_CHANGE",
-        "READY",
-        "",
-        -1,
-        "READY"
+            global_scheduler.current_time,
+            p->pid,
+            "STATE_CHANGE",
+            "READY",
+            "",
+            -1,
+            "READY"
     );
 
     /* =====================================================
@@ -147,20 +147,20 @@ void scheduler_add_ready(PCB *p) {
 
             /* Log de la préemption */
             trace_event(
-            global_scheduler.current_time,
-            current->pid,
-            "PREEMPTED",
-            "READY",
-            "higher_priority_arrived",
-            -1,
-            "READY"
+                    global_scheduler.current_time,
+                    current->pid,
+                    "PREEMPTED",
+                    "READY",
+                    "higher_priority_arrived",
+                    -1,
+                    "READY"
             );
         }
     }
 }
 
 /* ===================================================================== */
-/*                       SÉLECTION DU PROCHAIN PROCESS                   */
+/* SÉLECTION DU PROCHAIN PROCESS                  */
 /* ===================================================================== */
 
 PCB *scheduler_pick_next(void) {
@@ -212,13 +212,13 @@ PCB *scheduler_pick_next(void) {
 
         // Trace : passage en RUNNING sur le CPU
         trace_event(
-            global_scheduler.current_time,
-            next->pid,
-            "STATE_CHANGE",
-            "RUNNING",
-            "",
-            0,          // id CPU (mono-cœur)
-            "CPU"
+                global_scheduler.current_time,
+                next->pid,
+                "STATE_CHANGE",
+                "RUNNING",
+                "",
+                0,          // id CPU (mono-cœur)
+                "CPU"
         );
     } else {
         global_scheduler.current = NULL;
@@ -228,7 +228,7 @@ PCB *scheduler_pick_next(void) {
 }
 
 /* ===================================================================== */
-/*                            BLOQUAGE PROCESS                           */
+/* BLOQUAGE PROCESS                           */
 /* ===================================================================== */
 
 void scheduler_block(PCB *p, const char *reason, const char *queue_label) {
@@ -239,14 +239,15 @@ void scheduler_block(PCB *p, const char *reason, const char *queue_label) {
     pcb_queue_up(&global_scheduler.blocked_queue, p);
 
     // Log de l'événement de blocage
+    // CORRECTION ICI : utilisation de la variable 'reason' au lieu du texte hardcodé
     trace_event(
-        global_scheduler.current_time, // time
-        p->pid,                        // pid
-        "STATE_CHANGE",                // event
-        "BLOCKED",                     // state
-        "io_or_lock",                  // reason (à affiner plus tard)
-        -1,                            // cpu (pas sur CPU, en attente)
-        "BLOCKED"                      // queue
+            global_scheduler.current_time, // time
+            p->pid,                        // pid
+            "STATE_CHANGE",                // event
+            "BLOCKED",                     // state
+            reason ? reason : "unknown",   // reason (io, mutex, etc.)
+            -1,                            // cpu (pas sur CPU, en attente)
+            "BLOCKED"                      // queue
     );
 
     // Si c'était le processus courant, le CPU devient libre
@@ -256,7 +257,7 @@ void scheduler_block(PCB *p, const char *reason, const char *queue_label) {
 }
 
 /* ===================================================================== */
-/*                           TERMINAISON PROCESS                         */
+/* TERMINAISON PROCESS                         */
 /* ===================================================================== */
 
 void scheduler_terminate(PCB *p) {
@@ -278,13 +279,13 @@ void scheduler_terminate(PCB *p) {
 
     // Trace CSV
     trace_event(
-        global_scheduler.current_time, // time
-        p->pid,                        // pid
-        "TERMINATED",                  // event
-        "TERMINATED",                  // state
-        "",                            // reason
-        -1,                            // cpu (plus sur CPU)
-        "TERM"                         // queue (file des terminés)
+            global_scheduler.current_time, // time
+            p->pid,                        // pid
+            "TERMINATED",                  // event
+            "TERMINATED",                  // state
+            "",                            // reason
+            -1,                            // cpu (plus sur CPU)
+            "TERM"                         // queue (file des terminés)
     );
 
     // Libérer le CPU si c'était le process courant
@@ -296,7 +297,7 @@ void scheduler_terminate(PCB *p) {
 
 
 /* ===================================================================== */
-/*                     TEST FIN DE SIMULATION                            */
+/* TEST FIN DE SIMULATION                           */
 /* ===================================================================== */
 
 bool scheduler_is_finished(void) {
@@ -305,7 +306,7 @@ bool scheduler_is_finished(void) {
 }
 
 /* ===================================================================== */
-/*                              TICK SCHEDULER                           */
+/* TICK SCHEDULER                           */
 /* ===================================================================== */
 
 void scheduler_tick(void) {
@@ -319,7 +320,7 @@ void scheduler_tick(void) {
 
         /* =======================================================
            CAS 1 : Round Robin préemptif (SCHED_ROUND_ROBIN)
-                 OU priorité + RR (SCHED_P_RR)
+                OU priorité + RR (SCHED_P_RR)
            ======================================================= */
         if (global_scheduler.policy == SCHED_ROUND_ROBIN ||
             global_scheduler.policy == SCHED_P_RR)
@@ -332,7 +333,7 @@ void scheduler_tick(void) {
             if (p->remaining_time <= 0) {
                 scheduler_terminate(p);
             }
-            // --- Quantum expiré ---
+                // --- Quantum expiré ---
             else if (p->quantum_remaining <= 0) {
 
                 // Remettre le process en READY
@@ -350,13 +351,25 @@ void scheduler_tick(void) {
                 global_scheduler.current = NULL;
 
                 // log spécifique au quantum
+                // On utilise "timer" comme raison pour que le Gantt l'affiche bien
                 trace_event(global_scheduler.current_time, p->pid,
-                            "TIME_SLICE_EXPIRED", "READY", "", -1, "READY");
+                            "STATE_CHANGE", "BLOCKED", "timer", -1, "READY");
+                // NOTE: Technique courante pour RR : on passe momentanément par BLOCKED(timer)
+                // ou directement READY. Ici, pour voir le switch visuellement,
+                // souvent on log juste le changement vers READY.
+                // Correction pour ton graphe : on va logguer le retour en READY directement.
+                // Mais si tu veux voir la raison "timer", il faut que l'event précédent soit clair.
+                // Le code original logguait "TIME_SLICE_EXPIRED". Je vais le standardiser :
+                // On a déjà fait p->state = READY.
+
+                // RE-LOG CORRECT pour que ton outil comprenne :
+                trace_event(global_scheduler.current_time, p->pid,
+                            "STATE_CHANGE", "READY", "quantum", -1, "READY");
             }
         }
-        /* =======================================================
-           CAS 2 : PRIORITY (pas de quantum)
-           ======================================================= */
+            /* =======================================================
+               CAS 2 : PRIORITY (pas de quantum)
+               ======================================================= */
         else {
             p->remaining_time--;
             p->last_run_time = global_scheduler.current_time;
@@ -388,13 +401,13 @@ void scheduler_tick(void) {
             b->state = READY;
 
             trace_event(
-                global_scheduler.current_time,
-                b->pid,
-                "UNBLOCKED",
-                "READY",
-                "io",
-                -1,
-                "READY"
+                    global_scheduler.current_time,
+                    b->pid,
+                    "UNBLOCKED",
+                    "READY",
+                    "io",
+                    -1,
+                    "READY"
             );
 
             scheduler_add_ready(b);
